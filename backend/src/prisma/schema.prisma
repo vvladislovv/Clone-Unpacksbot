@@ -1,0 +1,297 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SELLER
+  BLOGGER
+  MANAGER
+  ADMIN
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  COMMISSION
+  REFERRAL
+  CAMPAIGN_PAYMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+model User {
+  id                String   @id @default(cuid())
+  telegramId        String?  @unique
+  username          String?  @unique
+  email             String?  @unique
+  phone             String?
+  firstName         String?
+  lastName          String?
+  avatar            String?
+  role              UserRole @default(SELLER)
+  isActive          Boolean  @default(true)
+  isVerified        Boolean  @default(false)
+  balance           Decimal  @default(0)
+  referralCode      String   @unique @default(cuid())
+  referredById      String?
+  passwordHash      String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  referredBy        User?               @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals         User[]              @relation("UserReferrals")
+  
+  campaigns         Campaign[]
+  transactions      Transaction[]
+  chatParticipants  ChatParticipant[]
+  messages          Message[]
+  products          Product[]
+  reviews           Review[]
+  supportTickets    SupportTicket[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  wbArticle     String   @unique // Wildberries article number
+  title         String
+  description   String?
+  price         Decimal
+  images        String[] // Array of image URLs
+  category      String
+  brand         String?
+  rating        Float?   @default(0)
+  reviewsCount  Int      @default(0)
+  isActive      Boolean  @default(true)
+  sellerId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  seller        User       @relation(fields: [sellerId], references: [id])
+  campaigns     Campaign[]
+
+  @@map("products")
+}
+
+model Channel {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  telegramLink  String?
+  subscribers   Int      @default(0)
+  category      String
+  isActive      Boolean  @default(true)
+  ownerId       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  campaigns     Campaign[]
+
+  @@map("channels")
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  title         String
+  description   String?
+  type          String // 'product' or 'channel'
+  budget        Decimal
+  pricePerClick Decimal
+  maxClicks     Int?
+  currentClicks Int            @default(0)
+  status        CampaignStatus @default(DRAFT)
+  startDate     DateTime?
+  endDate       DateTime?
+  productId     String?
+  channelId     String?
+  advertiserId  String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  advertiser    User      @relation(fields: [advertiserId], references: [id])
+  product       Product?  @relation(fields: [productId], references: [id])
+  channel       Channel?  @relation(fields: [channelId], references: [id])
+  clicks        Click[]
+
+  @@map("campaigns")
+}
+
+model Click {
+  id         String   @id @default(cuid())
+  campaignId String
+  userId     String?  // nullable for anonymous clicks
+  ipAddress  String
+  userAgent  String?
+  referrer   String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
+  @@map("clicks")
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  userId        String
+  type          TransactionType
+  amount        Decimal
+  commission    Decimal?          @default(0)
+  status        TransactionStatus @default(PENDING)
+  description   String?
+  externalId    String?           // Payment system transaction ID
+  metadata      Json?             // Additional data
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  // Relations
+  user          User              @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
+
+model Chat {
+  id          String   @id @default(cuid())
+  name        String?
+  isGroup     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@map("chats")
+}
+
+model ChatParticipant {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  isAdmin   Boolean  @default(false)
+
+  // Relations
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  chatId    String
+  senderId  String
+  type      MessageType @default(TEXT)
+  content   String
+  metadata  Json?       // For file info, reply data, etc.
+  isEdited  Boolean     @default(false)
+  isDeleted Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  chat      Chat        @relation(fields: [chatId], references: [id])
+  sender    User        @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  rating    Int      // 1-5 stars
+  comment   String?
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, productId])
+  @@map("reviews")
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String
+  subject   String
+  message   String
+  status    String   @default("open") // open, in_progress, closed
+  priority  String   @default("medium") // low, medium, high, urgent
+  assigneeId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("support_tickets")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      String   // 'info', 'success', 'warning', 'error'
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Settings {
+  id                    String  @id @default(cuid())
+  referralCommission    Float   @default(0.5) // 50%
+  platformCommission    Float   @default(0.1) // 10%
+  minWithdrawalAmount   Decimal @default(100)
+  maxWithdrawalAmount   Decimal @default(100000)
+  maintenanceMode       Boolean @default(false)
+  registrationEnabled   Boolean @default(true)
+
+  @@map("settings")
+}
