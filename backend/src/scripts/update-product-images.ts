@@ -52,3 +52,6 @@ async function updateProductImages() {
 // Запускаем скрипт
 updateProductImages();
 
+
+
+

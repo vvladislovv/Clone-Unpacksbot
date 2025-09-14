@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AcademyModule } from './academy/academy.module';
 import { AdminModule } from './admin/admin.module';
@@ -8,7 +8,6 @@ import { AffiliateModule } from './affiliate/affiliate.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ChatModule } from './chat/chat.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';

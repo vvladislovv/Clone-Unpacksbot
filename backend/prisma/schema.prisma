@@ -62,6 +62,7 @@ enum MessageType {
 enum DealStatus {
   PENDING
   CONFIRMED
+  SHIPPED
   COMPLETED
   CANCELLED
   DISPUTED
