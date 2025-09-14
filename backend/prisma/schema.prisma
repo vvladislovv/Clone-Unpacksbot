@@ -1,0 +1,455 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== ENUMS ==========
+
+enum UserRole {
+  BUYER
+  SELLER
+  BLOGGER
+  MANAGER
+  ADMIN
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  COMMISSION
+  REFERRAL
+  CAMPAIGN_PAYMENT
+  PAYMENT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  CRYPTO
+  PAYPAL
+  YOOMONEY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum DealStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  RESOLVED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  PAYMENT
+  DEAL
+  SYSTEM
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ========== MODELS ==========
+
+model User {
+  id                String   @id @default(cuid())
+  telegramId        String?  @unique
+  username          String?  @unique
+  email             String?  @unique
+  phone             String?
+  firstName         String?
+  lastName          String?
+  avatar            String?
+  role              UserRole @default(SELLER)
+  isActive          Boolean  @default(true)
+  isVerified        Boolean  @default(false)
+  isBlocked         Boolean  @default(false)
+  telegramVerified  Boolean  @default(false)
+  balance           Decimal  @default(0)
+  referralCode      String   @unique @default(cuid())
+  referredById      String?
+  passwordHash      String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  referredBy        User?               @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals         User[]              @relation("UserReferrals")
+  
+  transactions      Transaction[]
+  payments          Payment[]
+  dealsAsBuyer      Deal[]       @relation("DealBuyer")
+  dealsAsSeller     Deal[]       @relation("DealSeller")
+  chatParticipants  ChatParticipant[]
+  messages          Message[]
+  products          Product[]
+  supportTickets    SupportTicket[]
+  notifications     Notification[]
+  courseCompletions CourseCompletion[]
+  payouts           Payout[]
+  campaigns         Campaign[]
+  socialLinks       SocialLink[]
+
+  @@map("users")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  wbArticle     String   @unique // Wildberries article number
+  title         String
+  description   String?
+  price         Decimal
+  images        String[] // Array of image URLs
+  category      String
+  brand         String?
+  rating        Float?   @default(0)
+  reviewsCount  Int      @default(0)
+  isActive      Boolean  @default(true)
+  sellerId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  seller        User       @relation(fields: [sellerId], references: [id])
+  deals         Deal[]
+
+  @@map("products")
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  userId        String
+  type          TransactionType
+  amount        Decimal
+  commission    Decimal?          @default(0)
+  status        TransactionStatus @default(PENDING)
+  description   String?
+  externalId    String?           // Payment system transaction ID
+  metadata      Json?             // Additional data
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  // Relations
+  user          User              @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  userId        String
+  amount        Decimal
+  method        PaymentMethod
+  status        PaymentStatus @default(PENDING)
+  externalId    String?       // Payment system transaction ID
+  description   String?
+  metadata      Json?         // Additional payment data
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@map("payments")
+}
+
+
+model Deal {
+  id          String     @id @default(cuid())
+  buyerId     String
+  sellerId    String
+  productId   String
+  amount      Decimal
+  status      DealStatus @default(PENDING)
+  description String?
+  metadata    Json?      // Additional deal data
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  buyer       User       @relation("DealBuyer", fields: [buyerId], references: [id])
+  seller      User       @relation("DealSeller", fields: [sellerId], references: [id])
+  product     Product    @relation(fields: [productId], references: [id])
+
+  @@map("deals")
+}
+
+model Chat {
+  id          String   @id @default(cuid())
+  name        String?
+  isGroup     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@map("chats")
+}
+
+model ChatParticipant {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  isAdmin   Boolean  @default(false)
+
+  // Relations
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([chatId, userId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  chatId    String
+  senderId  String
+  type      MessageType @default(TEXT)
+  content   String
+  metadata  Json?       // For file info, reply data, etc.
+  isEdited  Boolean     @default(false)
+  isDeleted Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  chat      Chat        @relation(fields: [chatId], references: [id])
+  sender    User        @relation(fields: [senderId], references: [id])
+
+  @@map("messages")
+}
+
+model SupportTicket {
+  id        String                @id @default(cuid())
+  userId    String
+  subject   String
+  message   String
+  status    SupportTicketStatus   @default(OPEN)
+  priority  SupportTicketPriority @default(MEDIUM)
+  assigneeId String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  // Relations
+  user      User                  @relation(fields: [userId], references: [id])
+
+  @@map("support_tickets")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  // Relations
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  content     String?      // Rich text content
+  status      CourseStatus @default(DRAFT)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  lessons     Lesson[]
+  completions CourseCompletion[]
+
+  @@map("courses")
+}
+
+model Lesson {
+  id          String       @id @default(cuid())
+  courseId    String
+  title       String
+  content     String?      // Rich text content
+  videoUrl    String?
+  duration    Int?         // Duration in minutes
+  status      LessonStatus @default(DRAFT)
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  course      Course       @relation(fields: [courseId], references: [id])
+  completions CourseCompletion[]
+
+  @@map("lessons")
+}
+
+model CourseCompletion {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  lessonId  String
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+  lesson    Lesson   @relation(fields: [lessonId], references: [id])
+
+  @@unique([userId, courseId, lessonId])
+  @@map("course_completions")
+}
+
+model Payout {
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Decimal
+  status      String   @default("PENDING") // PENDING, COMPLETED, FAILED, CANCELLED
+  method      String   // BANK_TRANSFER, CARD, CRYPTO, etc.
+  externalId  String?  // External payment system ID
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("payouts")
+}
+
+model Settings {
+  id                    String  @id @default(cuid())
+  referralCommission    Float   @default(0.05) // 5%
+  platformCommission    Float   @default(0.1)  // 10%
+  minWithdrawalAmount   Decimal @default(100)
+  maxWithdrawalAmount   Decimal @default(100000)
+  maintenanceMode       Boolean @default(false)
+  registrationEnabled   Boolean @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ========== CAMPAIGNS ==========
+
+model Campaign {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  type          String   // 'product' | 'channel'
+  budget        Decimal
+  pricePerClick Decimal
+  maxClicks     Int?
+  clicksCount   Int      @default(0)
+  status        String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, CANCELLED
+  startDate     DateTime?
+  endDate       DateTime?
+  productId     String?
+  channelId     String?
+  advertiserId  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  advertiser    User            @relation(fields: [advertiserId], references: [id])
+  clicks        CampaignClick[]
+
+  @@map("campaigns")
+}
+
+model CampaignClick {
+  id         String   @id @default(cuid())
+  campaignId String
+  userId     String
+  clickedAt  DateTime @default(now())
+
+  // Relations
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
+  @@map("campaign_clicks")
+}
+
+// ========== SOCIAL LINKS ==========
+
+model SocialLink {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String   // 'telegram' | 'instagram' | 'youtube' | 'tiktok'
+  username  String
+  url       String
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("social_links")
+}
