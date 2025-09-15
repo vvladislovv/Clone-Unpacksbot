@@ -6,7 +6,39 @@ import { PrismaService } from '../prisma/prisma.service';
 export class StatisticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getUserStats(userId: string) {
+  private getDateFilter(period?: string) {
+    if (!period) return {};
+    
+    const now = new Date();
+    let startDate: Date;
+    
+    switch (period) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '1y':
+        startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        return {};
+    }
+    
+    return {
+      createdAt: {
+        gte: startDate,
+      },
+    };
+  }
+
+  async getUserStats(userId: string, period?: string) {
+    const dateFilter = this.getDateFilter(period);
+    
     const [
       totalProducts,
       activeProducts,
@@ -35,6 +67,7 @@ export class StatisticsService {
             { buyerId: userId },
             { sellerId: userId },
           ],
+          ...dateFilter,
         },
       }),
       this.prisma.deal.count({
@@ -44,6 +77,7 @@ export class StatisticsService {
             { sellerId: userId },
           ],
           status: DealStatus.COMPLETED,
+          ...dateFilter,
         },
       }),
       // Доходы: DEPOSIT + COMMISSION + REFERRAL + CAMPAIGN_PAYMENT
@@ -54,6 +88,7 @@ export class StatisticsService {
             in: ['DEPOSIT', 'COMMISSION', 'REFERRAL', 'CAMPAIGN_PAYMENT']
           },
           status: 'COMPLETED',
+          ...dateFilter,
         },
         _sum: { amount: true },
       }),
@@ -65,6 +100,7 @@ export class StatisticsService {
             in: ['WITHDRAWAL', 'PAYMENT']
           },
           status: 'COMPLETED',
+          ...dateFilter,
         },
         _sum: { amount: true },
       }),
@@ -77,25 +113,31 @@ export class StatisticsService {
           userId: userId,
           type: 'REFERRAL',
           status: 'COMPLETED',
+          ...dateFilter,
         },
         _sum: { amount: true },
       }),
       // Общее количество транзакций
       this.prisma.transaction.count({
-        where: { userId: userId },
+        where: { 
+          userId: userId,
+          ...dateFilter,
+        },
       }),
       // Завершенные транзакции
       this.prisma.transaction.count({
         where: { 
           userId: userId,
-          status: 'COMPLETED'
+          status: 'COMPLETED',
+          ...dateFilter,
         },
       }),
       // Ожидающие транзакции
       this.prisma.transaction.count({
         where: { 
           userId: userId,
-          status: 'PENDING'
+          status: 'PENDING',
+          ...dateFilter,
         },
       }),
       // Общий доход (все положительные транзакции)
@@ -106,6 +148,7 @@ export class StatisticsService {
             in: ['DEPOSIT', 'COMMISSION', 'REFERRAL', 'CAMPAIGN_PAYMENT']
           },
           status: 'COMPLETED',
+          ...dateFilter,
         },
         _sum: { amount: true },
       }),
@@ -117,6 +160,7 @@ export class StatisticsService {
             in: ['WITHDRAWAL', 'PAYMENT']
           },
           status: 'COMPLETED',
+          ...dateFilter,
         },
         _sum: { amount: true },
       }),

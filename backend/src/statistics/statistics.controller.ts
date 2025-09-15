@@ -1,4 +1,4 @@
-import { Controller, Get, Logger, Param, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ActionLogger } from '../common/decorators/action-logger.decorator';
@@ -17,10 +17,10 @@ export class StatisticsController {
   @ApiResponse({ status: 200, description: 'User statistics retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ActionLogger('Get User Statistics', 'StatisticsController')
-  async getUserStats(@Request() req) {
-    this.logger.log(`📊 Getting user statistics for: ${req.user.id}`);
+  async getUserStats(@Request() req, @Query('period') period?: string) {
+    this.logger.log(`📊 Getting user statistics for: ${req.user.id}, period: ${period || 'all'}`);
     this.logger.log(`📊 User object:`, JSON.stringify(req.user, null, 2));
-    return this.statisticsService.getUserStats(req.user.id);
+    return this.statisticsService.getUserStats(req.user.id, period);
   }
 
   @Get('product/:id')
